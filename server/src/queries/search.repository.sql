@@ -204,6 +204,7 @@ WITH
         "asset"."ownerId" IN ($2)
         AND "asset"."id" != $3
         AND "asset"."isVisible" = $4
+        AND "asset"."type" = $5
       )
       AND ("asset"."deletedAt" IS NULL)
     ORDER BY
@@ -216,7 +217,7 @@ SELECT
 FROM
   "cte" "res"
 WHERE
-  res.distance <= $5
+  res.distance <= $6
 
 -- SearchRepository.searchFaces
 START TRANSACTION
@@ -240,15 +241,16 @@ WITH
       "faces"."boundingBoxY1" AS "boundingBoxY1",
       "faces"."boundingBoxX2" AS "boundingBoxX2",
       "faces"."boundingBoxY2" AS "boundingBoxY2",
-      "faces"."embedding" <= > $1 AS "distance"
+      "search"."embedding" <= > $1 AS "distance"
     FROM
       "asset_faces" "faces"
       INNER JOIN "assets" "asset" ON "asset"."id" = "faces"."assetId"
       AND ("asset"."deletedAt" IS NULL)
+      INNER JOIN "face_search" "search" ON "search"."faceId" = "faces"."id"
     WHERE
       "asset"."ownerId" IN ($2)
     ORDER BY
-      "faces"."embedding" <= > $1 ASC
+      "search"."embedding" <= > $1 ASC
     LIMIT
       100
   )
@@ -403,3 +405,5 @@ FROM
   "assets" "asset"
   INNER JOIN "exif" "exif" ON "exif"."assetId" = "asset"."id"
   INNER JOIN cte ON asset.id = cte."assetId"
+ORDER BY
+  exif.city

@@ -150,7 +150,7 @@ export class JobService {
   }
 
   async init(jobHandlers: Record<JobName, JobHandler>) {
-    const config = await this.configCore.getConfig();
+    const config = await this.configCore.getConfig({ withCache: false });
     for (const queueName of Object.values(QueueName)) {
       let concurrency = 1;
 
@@ -250,7 +250,7 @@ export class JobService {
       }
 
       case JobName.STORAGE_TEMPLATE_MIGRATION_SINGLE: {
-        if (item.data.source === 'upload') {
+        if (item.data.source === 'upload' || item.data.source === 'copy') {
           await this.jobRepository.queue({ name: JobName.GENERATE_PREVIEW, data: item.data });
         }
         break;

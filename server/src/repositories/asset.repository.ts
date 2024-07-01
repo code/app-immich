@@ -21,8 +21,6 @@ import {
   AssetUpdateOptions,
   IAssetRepository,
   LivePhotoSearchOptions,
-  MapMarker,
-  MapMarkerSearchOptions,
   MonthDay,
   TimeBucketItem,
   TimeBucketOptions,
@@ -31,7 +29,7 @@ import {
   WithoutProperty,
 } from 'src/interfaces/asset.interface';
 import { AssetSearchOptions, SearchExploreItem } from 'src/interfaces/search.interface';
-import { OptionalBetween, searchAssetBuilder } from 'src/utils/database';
+import { searchAssetBuilder } from 'src/utils/database';
 import { Instrumentation } from 'src/utils/instrumentation';
 import { Paginated, PaginationMode, PaginationOptions, paginate, paginatedBuilder } from 'src/utils/pagination';
 import {
@@ -157,6 +155,20 @@ export class AssetRepository implements IAssetRepository {
     });
   }
 
+  async getByDeviceIds(ownerId: string, deviceId: string, deviceAssetIds: string[]): Promise<string[]> {
+    const assets = await this.repository.find({
+      select: { deviceAssetId: true },
+      where: {
+        deviceAssetId: In(deviceAssetIds),
+        deviceId,
+        ownerId,
+      },
+      withDeleted: true,
+    });
+
+    return assets.map((asset) => asset.deviceAssetId);
+  }
+
   getByUserId(
     pagination: PaginationOptions,
     userId: string,
@@ -176,7 +188,8 @@ export class AssetRepository implements IAssetRepository {
   @GenerateSql({ params: [DummyValue.UUID, DummyValue.STRING] })
   getByLibraryIdAndOriginalPath(libraryId: string, originalPath: string): Promise<AssetEntity | null> {
     return this.repository.findOne({
-      where: { library: { id: libraryId }, originalPath: originalPath },
+      where: { library: { id: libraryId }, originalPath },
+      withDeleted: true,
     });
   }
 
@@ -237,6 +250,16 @@ export class AssetRepository implements IAssetRepository {
   }
 
   @GenerateSql({ params: [DummyValue.UUID] })
+  getLivePhotoCount(motionId: string): Promise<number> {
+    return this.repository.count({
+      where: {
+        livePhotoVideoId: motionId,
+      },
+      withDeleted: true,
+    });
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID] })
   getById(
     id: string,
     relations: FindOptionsRelations<AssetEntity>,
@@ -290,13 +313,37 @@ export class AssetRepository implements IAssetRepository {
     await this.repository.remove(asset);
   }
 
-  @GenerateSql({ params: [DummyValue.UUID, DummyValue.BUFFER] })
-  getByChecksum(libraryId: string | null, checksum: Buffer): Promise<AssetEntity | null> {
+  @GenerateSql({ params: [{ ownerId: DummyValue.UUID, libraryId: DummyValue.UUID, checksum: DummyValue.BUFFER }] })
+  getByChecksum({
+    ownerId,
+    libraryId,
+    checksum,
+  }: {
+    ownerId: string;
+    checksum: Buffer;
+    libraryId?: string;
+  }): Promise<AssetEntity | null> {
     return this.repository.findOne({
       where: {
+        ownerId,
         libraryId: libraryId || IsNull(),
         checksum,
       },
+    });
+  }
+
+  @GenerateSql({ params: [DummyValue.UUID, DummyValue.BUFFER] })
+  getByChecksums(ownerId: string, checksums: Buffer[]): Promise<AssetEntity[]> {
+    return this.repository.find({
+      select: {
+        id: true,
+        checksum: true,
+      },
+      where: {
+        ownerId,
+        checksum: In(checksums),
+      },
+      withDeleted: true,
     });
   }
 
@@ -520,57 +567,6 @@ export class AssetRepository implements IAssetRepository {
     });
   }
 
-  async getMapMarkers(
-    ownerIds: string[],
-    albumIds: string[],
-    options: MapMarkerSearchOptions = {},
-  ): Promise<MapMarker[]> {
-    const { isArchived, isFavorite, fileCreatedAfter, fileCreatedBefore } = options;
-
-    const where = {
-      isVisible: true,
-      isArchived,
-      exifInfo: {
-        latitude: Not(IsNull()),
-        longitude: Not(IsNull()),
-      },
-      isFavorite,
-      fileCreatedAt: OptionalBetween(fileCreatedAfter, fileCreatedBefore),
-    };
-
-    const assets = await this.repository.find({
-      select: {
-        id: true,
-        exifInfo: {
-          city: true,
-          state: true,
-          country: true,
-          latitude: true,
-          longitude: true,
-        },
-      },
-      where: [
-        { ...where, ownerId: In([...ownerIds]) },
-        { ...where, albums: { id: In([...albumIds]) } },
-      ],
-      relations: {
-        exifInfo: true,
-      },
-      order: {
-        fileCreatedAt: 'DESC',
-      },
-    });
-
-    return assets.map((asset) => ({
-      id: asset.id,
-      lat: asset.exifInfo!.latitude!,
-      lon: asset.exifInfo!.longitude!,
-      city: asset.exifInfo!.city,
-      state: asset.exifInfo!.state,
-      country: asset.exifInfo!.country,
-    }));
-  }
-
   async getStatistics(ownerId: string, options: AssetStatsOptions): Promise<AssetStats> {
     const builder = this.repository
       .createQueryBuilder('asset')
@@ -773,43 +769,47 @@ export class AssetRepository implements IAssetRepository {
       {
         ownerId: DummyValue.UUID,
         lastCreationDate: DummyValue.DATE,
-        lastId: DummyValue.STRING,
+        lastId: DummyValue.UUID,
         updatedUntil: DummyValue.DATE,
         limit: 10,
       },
     ],
   })
   getAllForUserFullSync(options: AssetFullSyncOptions): Promise<AssetEntity[]> {
-    const { ownerId, lastCreationDate, lastId, updatedUntil, limit } = options;
+    const { ownerId, lastId, updatedUntil, limit } = options;
     const builder = this.getBuilder({
       userIds: [ownerId],
-      exifInfo: true, // also joins stack information
+      exifInfo: false, // need to do this manually because `exifInfo: true` also loads stacked assets messing with `limit`
       withStacked: false, // return all assets individually as expected by the app
-    });
+    })
+      .leftJoinAndSelect('asset.exifInfo', 'exifInfo')
+      .leftJoinAndSelect('asset.stack', 'stack')
+      .loadRelationCountAndMap('stack.assetCount', 'stack.assets', 'stackedAssetsCount');
 
-    if (lastCreationDate !== undefined && lastId !== undefined) {
-      builder.andWhere('(asset.fileCreatedAt, asset.id) < (:lastCreationDate, :lastId)', {
-        lastCreationDate,
-        lastId,
-      });
+    if (lastId !== undefined) {
+      builder.andWhere('asset.id > :lastId', { lastId });
     }
-
-    return builder
+    builder
       .andWhere('asset.updatedAt <= :updatedUntil', { updatedUntil })
-      .orderBy('asset.fileCreatedAt', 'DESC')
-      .addOrderBy('asset.id', 'DESC')
-      .limit(limit)
-      .withDeleted()
-      .getMany();
+      .orderBy('asset.id', 'ASC')
+      .limit(limit) // cannot use `take` for performance reasons
+      .withDeleted();
+    return builder.getMany();
   }
 
   @GenerateSql({ params: [{ userIds: [DummyValue.UUID], updatedAfter: DummyValue.DATE }] })
   getChangedDeltaSync(options: AssetDeltaSyncOptions): Promise<AssetEntity[]> {
-    const builder = this.getBuilder({ userIds: options.userIds, exifInfo: true, withStacked: false })
+    const builder = this.getBuilder({
+      userIds: options.userIds,
+      exifInfo: false, // need to do this manually because `exifInfo: true` also loads stacked assets messing with `limit`
+      withStacked: false, // return all assets individually as expected by the app
+    })
+      .leftJoinAndSelect('asset.exifInfo', 'exifInfo')
+      .leftJoinAndSelect('asset.stack', 'stack')
+      .loadRelationCountAndMap('stack.assetCount', 'stack.assets', 'stackedAssetsCount')
       .andWhere({ updatedAt: MoreThan(options.updatedAfter) })
-      .limit(options.limit)
+      .limit(options.limit) // cannot use `take` for performance reasons
       .withDeleted();
-
     return builder.getMany();
   }
 }

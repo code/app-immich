@@ -8,6 +8,7 @@ import { AssetStackEntity } from 'src/entities/asset-stack.entity';
 import { AssetEntity } from 'src/entities/asset.entity';
 import { AuditEntity } from 'src/entities/audit.entity';
 import { ExifEntity } from 'src/entities/exif.entity';
+import { FaceSearchEntity } from 'src/entities/face-search.entity';
 import { GeodataPlacesEntity } from 'src/entities/geodata-places.entity';
 import { LibraryEntity } from 'src/entities/library.entity';
 import { MemoryEntity } from 'src/entities/memory.entity';
@@ -20,6 +21,7 @@ import { SmartInfoEntity } from 'src/entities/smart-info.entity';
 import { SmartSearchEntity } from 'src/entities/smart-search.entity';
 import { SystemMetadataEntity } from 'src/entities/system-metadata.entity';
 import { TagEntity } from 'src/entities/tag.entity';
+import { UserMetadataEntity } from 'src/entities/user-metadata.entity';
 import { UserEntity } from 'src/entities/user.entity';
 
 export const entities = [
@@ -33,6 +35,7 @@ export const entities = [
   AssetJobStatusEntity,
   AuditEntity,
   ExifEntity,
+  FaceSearchEntity,
   GeodataPlacesEntity,
   MemoryEntity,
   MoveEntity,
@@ -44,6 +47,7 @@ export const entities = [
   SystemMetadataEntity,
   TagEntity,
   UserEntity,
+  UserMetadataEntity,
   SessionEntity,
   LibraryEntity,
 ];

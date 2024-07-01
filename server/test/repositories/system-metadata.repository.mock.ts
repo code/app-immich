@@ -10,7 +10,7 @@ export const newSystemMetadataRepositoryMock = (reset = true): Mocked<ISystemMet
   return {
     get: vitest.fn() as any,
     set: vitest.fn(),
+    delete: vitest.fn(),
     readFile: vitest.fn(),
-    fetchStyle: vitest.fn(),
   };
 };

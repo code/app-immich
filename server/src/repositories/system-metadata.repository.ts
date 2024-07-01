@@ -26,18 +26,8 @@ export class SystemMetadataRepository implements ISystemMetadataRepository {
     await this.repository.upsert({ key, value }, { conflictPaths: { key: true } });
   }
 
-  async fetchStyle(url: string) {
-    try {
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data from ${url} with status ${response.status}: ${await response.text()}`);
-      }
-
-      return response.json();
-    } catch (error) {
-      throw new Error(`Failed to fetch data from ${url}: ${error}`);
-    }
+  async delete<T extends keyof SystemMetadata>(key: T): Promise<void> {
+    await this.repository.delete({ key });
   }
 
   readFile(filename: string): Promise<string> {

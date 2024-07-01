@@ -16,6 +16,7 @@ import 'package:immich_mobile/models/map/map_marker.model.dart';
 import 'package:immich_mobile/providers/map/map_marker.provider.dart';
 import 'package:immich_mobile/providers/map/map_state.provider.dart';
 import 'package:immich_mobile/utils/map_utils.dart';
+import 'package:immich_mobile/widgets/asset_grid/asset_grid_data_structure.dart';
 import 'package:immich_mobile/widgets/map/map_app_bar.dart';
 import 'package:immich_mobile/widgets/map/map_asset_grid.dart';
 import 'package:immich_mobile/widgets/map/map_bottom_sheet.dart';
@@ -35,7 +36,7 @@ class MapPage extends HookConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final mapController = useRef<MaplibreMapController?>(null);
+    final mapController = useRef<MapLibreMapController?>(null);
     final markers = useRef<List<MapMarker>>([]);
     final markersInBounds = useRef<List<MapMarker>>([]);
     final bottomSheetStreamController = useStreamController<MapEvent>();
@@ -155,7 +156,7 @@ class MapPage extends HookConsumerWidget {
       }
     }
 
-    void onMapCreated(MaplibreMapController controller) async {
+    void onMapCreated(MapLibreMapController controller) async {
       mapController.value = controller;
       controller.addListener(() {
         if (controller.isCameraMoving && selectedMarker.value != null) {
@@ -178,12 +179,17 @@ class MapPage extends HookConsumerWidget {
         return;
       }
 
+      // Since we only have a single asset, we can just show GroupAssetBy.none
+      final renderList = await RenderList.fromAssets(
+        [asset],
+        GroupAssetsBy.none,
+      );
+
       context.pushRoute(
         GalleryViewerRoute(
           initialIndex: 0,
-          loadAsset: (index) => asset,
-          totalAssets: 1,
           heroOffset: 0,
+          renderList: renderList,
         ),
       );
     }
@@ -298,7 +304,7 @@ class MapPage extends HookConsumerWidget {
                         ),
                         Positioned(
                           right: 0,
-                          bottom: 30,
+                          bottom: MediaQuery.of(context).padding.bottom + 16,
                           child: ElevatedButton(
                             onPressed: onZoomToLocation,
                             style: ElevatedButton.styleFrom(
@@ -373,7 +379,7 @@ class _MapWithMarker extends StatelessWidget {
         child: Stack(
           children: [
             style.widgetWhen(
-              onData: (style) => MaplibreMap(
+              onData: (style) => MapLibreMap(
                 initialCameraPosition:
                     const CameraPosition(target: LatLng(0, 0)),
                 styleString: style,
@@ -387,7 +393,7 @@ class _MapWithMarker extends StatelessWidget {
                 tiltGesturesEnabled: false,
                 dragEnabled: false,
                 myLocationEnabled: false,
-                attributionButtonPosition: AttributionButtonPosition.TopRight,
+                attributionButtonPosition: AttributionButtonPosition.topRight,
                 rotateGesturesEnabled: false,
               ),
             ),

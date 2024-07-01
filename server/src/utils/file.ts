@@ -65,10 +65,10 @@ export const sendFile = async (
 
     await access(file.path, constants.R_OK);
 
-    return _sendFile(file.path, options);
+    return await _sendFile(file.path, options);
   } catch (error: Error | any) {
     // ignore client-closed connection
-    if (isConnectionAborted(error)) {
+    if (isConnectionAborted(error) || res.headersSent) {
       return;
     }
 

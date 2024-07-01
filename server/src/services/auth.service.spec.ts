@@ -4,10 +4,10 @@ import { Issuer, generators } from 'openid-client';
 import { Socket } from 'socket.io';
 import { AuthType } from 'src/constants';
 import { AuthDto, SignUpDto } from 'src/dtos/auth.dto';
+import { UserMetadataEntity } from 'src/entities/user-metadata.entity';
 import { UserEntity } from 'src/entities/user.entity';
 import { IKeyRepository } from 'src/interfaces/api-key.interface';
 import { ICryptoRepository } from 'src/interfaces/crypto.interface';
-import { ILibraryRepository } from 'src/interfaces/library.interface';
 import { ILoggerRepository } from 'src/interfaces/logger.interface';
 import { ISessionRepository } from 'src/interfaces/session.interface';
 import { ISharedLinkRepository } from 'src/interfaces/shared-link.interface';
@@ -20,10 +20,8 @@ import { sessionStub } from 'test/fixtures/session.stub';
 import { sharedLinkStub } from 'test/fixtures/shared-link.stub';
 import { systemConfigStub } from 'test/fixtures/system-config.stub';
 import { userStub } from 'test/fixtures/user.stub';
-import { IAccessRepositoryMock, newAccessRepositoryMock } from 'test/repositories/access.repository.mock';
 import { newKeyRepositoryMock } from 'test/repositories/api-key.repository.mock';
 import { newCryptoRepositoryMock } from 'test/repositories/crypto.repository.mock';
-import { newLibraryRepositoryMock } from 'test/repositories/library.repository.mock';
 import { newLoggerRepositoryMock } from 'test/repositories/logger.repository.mock';
 import { newSessionRepositoryMock } from 'test/repositories/session.repository.mock';
 import { newSharedLinkRepositoryMock } from 'test/repositories/shared-link.repository.mock';
@@ -59,10 +57,8 @@ const oauthUserWithDefaultQuota = {
 
 describe('AuthService', () => {
   let sut: AuthService;
-  let accessMock: Mocked<IAccessRepositoryMock>;
   let cryptoMock: Mocked<ICryptoRepository>;
   let userMock: Mocked<IUserRepository>;
-  let libraryMock: Mocked<ILibraryRepository>;
   let loggerMock: Mocked<ILoggerRepository>;
   let systemMock: Mocked<ISystemMetadataRepository>;
   let sessionMock: Mocked<ISessionRepository>;
@@ -92,27 +88,15 @@ describe('AuthService', () => {
       }),
     } as any);
 
-    accessMock = newAccessRepositoryMock();
     cryptoMock = newCryptoRepositoryMock();
     userMock = newUserRepositoryMock();
-    libraryMock = newLibraryRepositoryMock();
     loggerMock = newLoggerRepositoryMock();
     systemMock = newSystemMetadataRepositoryMock();
     sessionMock = newSessionRepositoryMock();
     shareMock = newSharedLinkRepositoryMock();
     keyMock = newKeyRepositoryMock();
 
-    sut = new AuthService(
-      accessMock,
-      cryptoMock,
-      systemMock,
-      libraryMock,
-      loggerMock,
-      userMock,
-      sessionMock,
-      shareMock,
-      keyMock,
-    );
+    sut = new AuthService(cryptoMock, systemMock, loggerMock, userMock, sessionMock, shareMock, keyMock);
   });
 
   it('should be defined', () => {
@@ -154,6 +138,7 @@ describe('AuthService', () => {
         email: 'test@immich.com',
         password: 'hash-password',
       } as UserEntity);
+      userMock.update.mockResolvedValue(userStub.user1);
 
       await sut.changePassword(auth, dto);
 
@@ -248,8 +233,13 @@ describe('AuthService', () => {
 
     it('should sign up the admin', async () => {
       userMock.getAdmin.mockResolvedValue(null);
-      userMock.create.mockResolvedValue({ ...dto, id: 'admin', createdAt: new Date('2021-01-01') } as UserEntity);
-      await expect(sut.adminSignUp(dto)).resolves.toEqual({
+      userMock.create.mockResolvedValue({
+        ...dto,
+        id: 'admin',
+        createdAt: new Date('2021-01-01'),
+        metadata: [] as UserMetadataEntity[],
+      } as UserEntity);
+      await expect(sut.adminSignUp(dto)).resolves.toMatchObject({
         avatarColor: expect.any(String),
         id: 'admin',
         createdAt: new Date('2021-01-01'),
@@ -405,12 +395,12 @@ describe('AuthService', () => {
       userMock.getAdmin.mockResolvedValue(userStub.user1);
       userMock.create.mockResolvedValue(userStub.user1);
 
-      await expect(sut.callback({ url: 'http://immich/auth/login?code=abc123' }, loginDetails)).resolves.toEqual(
-        loginResponseStub.user1oauth,
+      await expect(sut.callback({ url: 'http://immich/auth/login?code=abc123' }, loginDetails)).rejects.toThrow(
+        BadRequestException,
       );
 
       expect(userMock.update).not.toHaveBeenCalled();
-      expect(userMock.create).toHaveBeenCalled();
+      expect(userMock.create).not.toHaveBeenCalled();
     });
 
     it('should allow auto registering by default', async () => {

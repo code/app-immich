@@ -13,8 +13,8 @@ import { Authenticated } from 'src/middleware/auth.guard';
 import { LibraryService } from 'src/services/library.service';
 import { UUIDParamDto } from 'src/validation';
 
-@ApiTags('Library')
-@Controller('library')
+@ApiTags('Libraries')
+@Controller('libraries')
 export class LibraryController {
   constructor(private service: LibraryService) {}
 
